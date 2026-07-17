@@ -1,10 +1,16 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import type { User as FirebaseUser } from 'firebase/auth';
+import { auth } from '../firebase';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as firebaseSignOut
+} from 'firebase/auth';
 
 interface AuthContextValue {
-  session: Session | null;
-  user: User | null;
+  session: any | null; // Firebase doesn't have a session object like Supabase; keep as any for compatibility
+  user: FirebaseUser | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
@@ -14,43 +20,43 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<any | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setSession(u);
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => listener.subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      return { error: null };
+    } catch (err: any) {
+      return { error: err?.message ?? String(err) };
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
-    // If no session returned, the user was created but needs confirmation
-    if (!data.session && data.user) {
-      return { error: null, needsConfirmation: true };
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const createdUser = userCredential.user;
+      // If email verification is required, the user may need to confirm their email
+      const needsConfirmation = createdUser && !createdUser.emailVerified;
+      return { error: null, needsConfirmation };
+    } catch (err: any) {
+      return { error: err?.message ?? String(err) };
     }
-    return { error: null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await firebaseSignOut(auth);
   };
 
   return (
