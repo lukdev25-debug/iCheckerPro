@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: #2A2A2A;
+  }
+
+  body {
+    background-color: #050505;
+    color: #FFFFFF;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Sora', sans-serif;
+  }
+
+  ::selection {
+    background-color: rgba(102, 255, 51, 0.25);
+    color: #fff;
+  }
+}
+
+@layer components {
+  .glass {
+    background: rgba(24, 24, 24, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .card-base {
+    background-color: #181818;
+    border: 1px solid #2A2A2A;
+    border-radius: 20px;
+    padding: 24px;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+  }
+
+  .card-base:hover {
+    border-color: #66FF33;
+    box-shadow: 0 0 24px rgba(102, 255, 51, 0.15);
+    transform: translateY(-2px);
+  }
+
+  .btn-primary {
+    background-color: #66FF33;
+    color: #050505;
+    font-weight: 600;
+    border-radius: 16px;
+    padding: 12px 28px;
+    transition: all 0.25s ease;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 32px rgba(102, 255, 51, 0.5);
+    transform: scale(1.03);
+  }
+
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+
+  .btn-secondary {
+    background-color: transparent;
+    border: 1px solid #66FF33;
+    color: #fff;
+    font-weight: 500;
+    border-radius: 16px;
+    padding: 12px 28px;
+    transition: all 0.25s ease;
+  }
+
+  .btn-secondary:hover {
+    background-color: rgba(102, 255, 51, 0.08);
+    box-shadow: 0 0 20px rgba(102, 255, 51, 0.2);
+  }
+
+  .input-field {
+    background-color: #111111;
+    border: 1px solid #2A2A2A;
+    border-radius: 14px;
+    padding: 14px 18px;
+    color: #fff;
+    width: 100%;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: #66FF33;
+    box-shadow: 0 0 16px rgba(102, 255, 51, 0.15);
+  }
+
+  .input-field::placeholder {
+    color: #6b6b6b;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
