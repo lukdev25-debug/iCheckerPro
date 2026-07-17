@@ -1,11 +1,8 @@
-// src/lib/supabase.ts
-// Backwards-compatibility shim: exports a noop-safe supabase client so that
-// imports from old modules (src/lib/supabase.ts) will not cause build failures
-// when @supabase/supabase-js is not installed.
+import supabaseDefault from '../lib/supabaseClient';
 
-import supabase from '../supabaseClient';
+// Export both named and default to match existing imports like: `import { supabase } from './supabase'`
+export const supabase = supabaseDefault;
+export default supabaseDefault;
 
-export default supabase;
-
-// also export createClient if some modules expect it
+// Re-export createClient for compatibility
 export { createClient } from '../lib/supabaseClient';
