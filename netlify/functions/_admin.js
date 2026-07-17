@@ -1,23 +1,43 @@
-// netlify/functions/_admin.js
-// Helper to initialize Firebase Admin SDK using a service account stored in environment
-let admin;
-let db;
+// netlify/functions/_admin.js (ES module)
+// Helper to initialize Firebase Admin SDK using a service account stored in environment or decrypted file
 
-function initAdmin() {
-  if (admin && db) return { admin, db };
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+let cached = null;
+
+export async function initAdmin() {
+  if (cached) return cached;
+
+  // dynamic import of firebase-admin (works in ESM)
+  let adminModule;
   try {
-    // lazy require
-    admin = require('firebase-admin');
+    adminModule = await import('firebase-admin');
   } catch (e) {
     throw new Error('firebase-admin module is required in Functions environment');
   }
+  const admin = adminModule.default ?? adminModule;
 
-  if (!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 is not set in environment');
+  // Try to read decrypted service account file first
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const secretPath = path.join(__dirname, '_secrets', 'service_account.json');
+
+  let serviceAccount = null;
+  if (fs.existsSync(secretPath)) {
+    const raw = fs.readFileSync(secretPath, 'utf8');
+    serviceAccount = JSON.parse(raw);
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    try {
+      const serviceAccountJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8');
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } catch (e) {
+      throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64: ' + e.message);
+    }
+  } else {
+    throw new Error('No Firebase service account configured (neither file nor FIREBASE_SERVICE_ACCOUNT_BASE64).');
   }
-
-  const serviceAccountJson = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8');
-  const serviceAccount = JSON.parse(serviceAccountJson);
 
   if (!admin.apps.length) {
     admin.initializeApp({
@@ -25,8 +45,7 @@ function initAdmin() {
     });
   }
 
-  db = admin.firestore();
-  return { admin, db };
+  const db = admin.firestore();
+  cached = { admin, db };
+  return cached;
 }
-
-module.exports = { initAdmin };
