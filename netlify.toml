@@ -1,8 +1,8 @@
 [build]
   command = "npm run build"
-  publish = "build"
+  publish = "dist"
 
-# Si quieres mapear /api/* a funciones, usa reglas de redirect. Aquí usamos las funciones directas en /.netlify/functions/*
+# Map /api/* to Netlify Functions
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"

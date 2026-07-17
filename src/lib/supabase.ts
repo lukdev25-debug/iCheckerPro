@@ -1,12 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+// src/lib/supabase.ts
+// Backwards-compatibility shim: exports a noop-safe supabase client so that
+// imports from old modules (src/lib/supabase.ts) will not cause build failures
+// when @supabase/supabase-js is not installed.
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+import supabase from '../supabaseClient';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+export default supabase;
+
+// also export createClient if some modules expect it
+export { createClient } from '../lib/supabaseClient';
