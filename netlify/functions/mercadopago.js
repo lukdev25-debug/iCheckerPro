@@ -12,6 +12,10 @@ export const handler = async (event) => {
       const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
       const MP_MODE = (process.env.MP_MODE || 'production').toLowerCase(); // 'production' or 'test'
 
+      // Temporary logs for debugging environment and response (do not log sensitive tokens)
+      console.log('[mercadopago] MP_MODE=', MP_MODE);
+      console.log('[mercadopago] MP_ACCESS_TOKEN configured=', !!MP_ACCESS_TOKEN);
+
       if (!MP_ACCESS_TOKEN) {
         return { statusCode: 500, body: JSON.stringify({ message: 'MP_ACCESS_TOKEN not configured' }) };
       }
@@ -45,8 +49,6 @@ export const handler = async (event) => {
         };
       }
 
-      // Create preference on MercadoPago. The token you provide determines whether this is a sandbox or production preference.
-      // To use production, set MP_MODE=production and provide a production MP_ACCESS_TOKEN in Netlify env vars.
       const resp = await fetch('https://api.mercadopago.com/checkout/preferences', {
         method: 'POST',
         headers: {
@@ -57,14 +59,15 @@ export const handler = async (event) => {
       });
 
       const data = await resp.json();
+
+      // Log which init URLs the API returned for debugging
+      console.log('[mercadopago] response has init_point=', !!data.init_point, 'sandbox_init_point=', !!data.sandbox_init_point);
+
       if (!resp.ok) {
         console.error('MercadoPago API error', data);
         return { statusCode: resp.status || 500, body: JSON.stringify({ message: 'MercadoPago API error', data }) };
       }
 
-      // Choose which init URL to return based on MP_MODE and response.
-      // - If MP_MODE is 'production', prefer data.init_point (production checkout URL).
-      // - If MP_MODE is 'test' and the response includes sandbox_init_point, prefer that.
       const result = {
         init_point: data.init_point ?? null,
         sandbox_init_point: data.sandbox_init_point ?? null,
@@ -72,9 +75,8 @@ export const handler = async (event) => {
       };
 
       if (MP_MODE === 'production') {
-        // If we don't get a production init_point, still return whatever the API returned but log a warning.
         if (!result.init_point && result.sandbox_init_point) {
-          console.warn('MP_MODE=production but MercadoPago returned only sandbox_init_point. Check that MP_ACCESS_TOKEN is a production token.');
+          console.warn('[mercadopago] MP_MODE=production but MercadoPago returned only sandbox_init_point. This usually means the access token provided is a sandbox/test token or the MercadoPago account is not enabled for production checkout.');
         }
       }
 
