@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
-    "firebase": "^10.16.0",
+    "firebase": "^9.22.2",
     "firebase-admin": "^11.10.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
