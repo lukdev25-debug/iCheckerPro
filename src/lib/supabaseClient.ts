@@ -1,98 +1,87 @@
 // src/lib/supabaseClient.ts
-// Shim to avoid app-crashing when Supabase env vars are missing.
-// If you no longer want to use Supabase, this module will safely return a noop client
-// so the app doesn't throw on initialization. You can gradually replace usages
-// with Firebase implementations.
+// Improved no-op Supabase client shim that supports the common chainable
+// query builder API (from(...).select(...).eq(...).maybeSingle() etc.) so the
+// app won't crash if Supabase isn't configured. The real supabase-js API
+// returns a chainable query builder where `.select()` returns an object that
+// supports `.eq()`, `.single()`, `.maybeSingle()`, and is awaitable (thenable).
 
 type SafeResult = Promise<{ data: any | null; error: any | null }>;
 
-const noop = async (..._args: any[]): SafeResult => ({ data: null, error: null });
+const noopAsync = async (..._args: any[]): Promise<{ data: null; error: null }> => ({ data: null, error: null });
+
+function makeThenableResult(): any {
+  const promise = Promise.resolve({ data: null, error: null });
+  // A very small query-builder-like object that is both chainable and thenable
+  const qb: any = {
+    select: (..._args: any[]) => qb,
+    eq: (_field: string, _value: any) => qb,
+    neq: (_field: string, _value: any) => qb,
+    order: (..._args: any[]) => qb,
+    limit: (_n: number) => qb,
+    range: (_a: number, _b: number) => qb,
+    single: () => promise,
+    maybeSingle: () => promise,
+    then: (onFulfilled: any, onRejected: any) => promise.then(onFulfilled, onRejected),
+    catch: (onRejected: any) => promise.catch(onRejected),
+    // support chaining .returns or .rpc if some code expects them
+    returns: () => promise,
+    rpc: () => promise,
+  };
+
+  return qb;
+}
 
 const safeFrom = (_table: string) => ({
-  select: noop,
-  insert: noop,
-  update: noop,
-  delete: noop,
-  upsert: noop,
-  eq: () => ({ select: noop }),
+  select: (..._args: any[]) => makeThenableResult(),
+  insert: (_data: any) => noopAsync(_data),
+  update: (_data: any) => noopAsync(_data),
+  delete: (_args: any) => noopAsync(_args),
+  upsert: (_data: any) => noopAsync(_data),
+  eq: (_field: string, _value: any) => ({ select: () => makeThenableResult() }),
   single: async () => ({ data: null, error: null }),
   maybeSingle: async () => ({ data: null, error: null }),
-  limit: () => ({ select: noop }),
+  limit: (_n: number) => ({ select: () => makeThenableResult() }),
 });
 
 const safeClient = {
   from: safeFrom,
-  rpc: noop,
+  rpc: async (..._args: any[]) => ({ data: null, error: null }),
   auth: {
-    signIn: noop,
-    signOut: noop,
+    signIn: async (..._args: any[]) => ({ data: null, error: null }),
+    signOut: async () => ({ data: null, error: null }),
     user: () => null,
-    getUser: noop,
+    getUser: async () => ({ data: null, error: null }),
+    onAuthStateChange: (_cb: any) => ({ data: null }),
   },
   storage: {
-    from: () => ({ upload: noop, getPublicUrl: () => ({ data: null }) }),
+    from: () => ({ upload: async () => ({ data: null, error: null }), getPublicUrl: async () => ({ data: null }) }),
   },
 };
 
-function getEnvVarCandidates() {
-  // Support common patterns used in CRA and Vite projects
-  // Vite: import.meta.env.VITE_SUPABASE_URL
-  // CRA: process.env.REACT_APP_SUPABASE_URL
-  // fallback generic: process.env.SUPABASE_URL
-  const vite = typeof import.meta !== 'undefined' && (import.meta as any).env;
-  const viteEnv = vite ? (vite as any).VITE_SUPABASE_URL : undefined;
-  const viteKey = vite ? (vite as any).VITE_SUPABASE_ANON_KEY : undefined;
-
-  const reactUrl = typeof process !== 'undefined' ? (process.env as any).REACT_APP_SUPABASE_URL : undefined;
-  const reactKey = typeof process !== 'undefined' ? (process.env as any).REACT_APP_SUPABASE_ANON_KEY : undefined;
-
-  const genericUrl = typeof process !== 'undefined' ? (process.env as any).SUPABASE_URL : undefined;
-  const genericKey = typeof process !== 'undefined' ? (process.env as any).SUPABASE_ANON_KEY : undefined;
-
-  return {
-    url: viteEnv || reactUrl || genericUrl,
-    key: viteKey || reactKey || genericKey,
-  };
-}
-
+// Exported factory to keep compatibility with code that might call createClient.
 export function createClient(url?: string | null, key?: string | null) {
-  const u = url ?? getEnvVarCandidates().url;
-  const k = key ?? getEnvVarCandidates().key;
-
-  if (!u || !k) {
-    // Return a safe no-op client so the app doesn't crash when Supabase isn't configured.
-    console.warn('[supabaseClient] Supabase not configured — returning safe noop client.');
-    return safeClient as any;
-  }
-
-  try {
-    // Attempt to load the real Supabase client if available
-    // Use dynamic import so bundlers that don't include @supabase/supabase-js won't fail at build time.
-    // Note: in some environments this will be async; we require a sync return, so use require fallback.
-    // Try global require (Node) first
-    let supabaseModule: any = null;
+  // If both url and key are provided, try to dynamically require the real client.
+  if (url && key) {
     try {
+      // Attempt to require the real @supabase/supabase-js package if present
+      // (this will work in Node environments that have it installed).
       // eslint-disable-next-line @typescript-eslint/no-var-requires
-      supabaseModule = require('@supabase/supabase-js');
+      const supabaseModule = require('@supabase/supabase-js');
+      if (supabaseModule && supabaseModule.createClient) {
+        return supabaseModule.createClient(url, key);
+      }
     } catch (e) {
-      // ignore
+      // ignore and fall back to safe client
+      // eslint-disable-next-line no-console
+      console.warn('[supabaseClient] @supabase/supabase-js not available at runtime, using noop client.');
     }
-
-    if (supabaseModule && supabaseModule.createClient) {
-      return supabaseModule.createClient(u, k);
-    }
-
-    // If require isn't available (browser), try dynamic import (note: dynamic import is async)
-    // but we still can't await here; fallback to safe client with a console warning.
-    console.warn('[supabaseClient] @supabase/supabase-js not found at runtime — using noop client.');
-    return safeClient as any;
-  } catch (err) {
-    console.error('[supabaseClient] Error creating supabase client', err);
-    return safeClient as any;
   }
+
+  // If url/key not provided or real client unavailable, return the safe noop client
+  console.warn('[supabaseClient] Supabase not configured — returning safe noop client.');
+  return safeClient as any;
 }
 
-// Default export: a client created from environment
-const env = getEnvVarCandidates();
-const supabase = createClient(env.url, env.key);
-export default supabase;
+// Default export: a no-op client (keeps existing import styles working)
+const defaultClient = safeClient as any;
+export default defaultClient;
