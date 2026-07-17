@@ -1,18 +1,14 @@
-// netlify/functions/binance-create-order.js
-// Netlify Function that creates an order with Binance Pay and stores the order in Firestore (Admin SDK).
-// Requires env vars: BINANCE_API_KEY, BINANCE_API_SECRET, BINANCE_MERCHANT_ID, FIREBASE_SERVICE_ACCOUNT_BASE64
+import crypto from 'crypto';
+import fetch from 'node-fetch';
+import { initAdmin } from './_admin.js';
 
-const crypto = require('crypto');
-const fetch = global.fetch || require('node-fetch');
-const { initAdmin } = require('./_admin');
-
-exports.handler = async function (event, context) {
+export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: JSON.stringify({ message: 'Method Not Allowed' }) };
   }
 
   try {
-    const { db } = initAdmin();
+    const { db } = await initAdmin();
 
     const body = JSON.parse(event.body || '{}');
     const { amount = 0, currency = 'USD', orderId = `order-${Date.now()}`, description = '' } = body;
@@ -26,14 +22,12 @@ exports.handler = async function (event, context) {
       return { statusCode: 500, body: JSON.stringify({ message: 'Binance credentials not configured' }) };
     }
 
-    // Prepare payload according to Binance Pay API. Adjust fields as required by Binance.
     const payload = {
       merchantTradeNo: orderId,
       merchantId: BINANCE_MERCHANT_ID,
       totalAmount: Number(amount),
-      currency: currency,
+      currency,
       productName: description || 'Compra iCheckerPro',
-      // add more fields per Binance Pay docs if needed
     };
 
     const payloadStr = JSON.stringify(payload);
@@ -59,7 +53,6 @@ exports.handler = async function (event, context) {
       return { statusCode: fetchResp.status || 500, body: JSON.stringify({ message: 'Binance API error', data }) };
     }
 
-    // Store the order in Firestore
     const ordersRef = db.collection('orders');
     const orderDoc = {
       orderId,
@@ -73,7 +66,6 @@ exports.handler = async function (event, context) {
 
     const docRef = await ordersRef.add(orderDoc);
 
-    // Return the Binance response plus our order doc id
     return {
       statusCode: 200,
       body: JSON.stringify({ success: true, data, orderDocId: docRef.id })
